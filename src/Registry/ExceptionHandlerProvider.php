@@ -10,7 +10,6 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use ReflectionObject;
 use SuperKernel\Contract\AnnotationCollectorInterface;
-use SuperKernel\Contract\AttributeMetadataInterface;
 use SuperKernel\ExceptionDispatcher\Attribute\ExceptionHandler;
 use SuperKernel\ExceptionDispatcher\Exception\InvalidExceptionHandlerDeclarationException;
 use Throwable;
@@ -47,7 +46,40 @@ final readonly class ExceptionHandlerProvider
                 ));
             }
 
-            $declaration = self::declaration($attributes[0], $className);
+            /** @var ExceptionHandler $declaration */
+            $declaration = $attributes[0]->attribute();
+            $declarationClass = $declaration::class;
+
+            $nativeDeclaration = new ReflectionObject($declaration)->getAttributes(Attribute::class);
+
+            if (1 !== count($nativeDeclaration)) {
+                throw new InvalidExceptionHandlerDeclarationException(sprintf(
+                    '%s on %s must itself declare PHP\'s native %s metadata.',
+                    $declarationClass,
+                    $className,
+                    Attribute::class,
+                ));
+            }
+
+            $flags = $nativeDeclaration[0]->newInstance()->flags;
+
+            if (Attribute::TARGET_CLASS !== $flags) {
+                throw new InvalidExceptionHandlerDeclarationException(sprintf(
+                    '%s on %s must be a non-repeatable class-only Attribute.',
+                    $declarationClass,
+                    $className,
+                ));
+            }
+
+            if (!is_a($declaration->exception, Throwable::class, true)) {
+                throw new InvalidExceptionHandlerDeclarationException(sprintf(
+                    '%s on %s must declare a Throwable class; %s provided.',
+                    $declarationClass,
+                    $className,
+                    $declaration->exception,
+                ));
+            }
+
             $registrations[] = [
                 'registration' => new ExceptionHandlerRegistration(
                     $declaration,
@@ -92,50 +124,5 @@ final readonly class ExceptionHandlerProvider
             /* @var ExceptionHandlerRegistration<TDeclaration> $registration */
             yield $registration;
         }
-    }
-
-    /**
-     * @param AttributeMetadataInterface<ExceptionHandler> $metadata
-     * @param class-string                                 $className
-     *
-     * @throws InvalidExceptionHandlerDeclarationException when the native Attribute shape or exception type is invalid
-     */
-    private static function declaration(AttributeMetadataInterface $metadata, string $className): ExceptionHandler
-    {
-        /** @var ExceptionHandler $declaration */
-        $declaration = $metadata->attribute();
-        $attribute = $declaration::class;
-
-        $nativeDeclaration = new ReflectionObject($declaration)->getAttributes(Attribute::class);
-
-        if (1 !== count($nativeDeclaration)) {
-            throw new InvalidExceptionHandlerDeclarationException(sprintf(
-                '%s on %s must itself declare PHP\'s native %s metadata.',
-                $attribute,
-                $className,
-                Attribute::class,
-            ));
-        }
-
-        $flags = $nativeDeclaration[0]->newInstance()->flags;
-
-        if (Attribute::TARGET_CLASS !== $flags) {
-            throw new InvalidExceptionHandlerDeclarationException(sprintf(
-                '%s on %s must be a non-repeatable class-only Attribute.',
-                $attribute,
-                $className,
-            ));
-        }
-
-        if (!is_a($declaration->exception, Throwable::class, true)) {
-            throw new InvalidExceptionHandlerDeclarationException(sprintf(
-                '%s on %s must declare a Throwable class; %s provided.',
-                $attribute,
-                $className,
-                $declaration->exception,
-            ));
-        }
-
-        return $declaration;
     }
 }
