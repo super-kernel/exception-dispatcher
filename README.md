@@ -43,11 +43,11 @@ The dispatcher is intended only after the current process DI graph is ready.
 
 Paths below are relative to `src/` and the package namespace.
 
-| Directory | Responsibility |
-| --- | --- |
+| Directory  | Responsibility                                                                                                     |
+|------------|--------------------------------------------------------------------------------------------------------------------|
 | `Registry` | `ExceptionHandlerProvider` and `ExceptionHandlerRegistration`: discovery, ordering, and exact declaration queries. |
-| `Reporter` | `FallbackExceptionReporter`: terminal exception logging. |
-| `Provider` | DI factories for the registry and dispatcher. |
+| `Reporter` | `FallbackExceptionReporter`: terminal exception logging.                                                           |
+| `Provider` | DI factories for the registry and dispatcher.                                                                      |
 
 ### Public namespaces
 
