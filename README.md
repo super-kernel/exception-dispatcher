@@ -1,22 +1,28 @@
+<p align="right">
+  <strong>English</strong> | <a href="README.zh-CN.md">中文文档</a>
+</p>
+
 # SuperKernel Exception Dispatcher
 
-`super-kernel/exception-dispatcher` provides the DI-ready exception-handler registry and generic dispatcher used by
-SuperKernel runtime boundaries.
+`super-kernel/exception-dispatcher` provides the DI-ready exception-handler registry and generic dispatcher used by SuperKernel runtime boundaries.
 
-`Attribute\ExceptionHandler` is the base class-only Attribute. It declares the handled `Throwable` class and numeric
-priority. A handler carrying that exact Attribute implements the component-local
-`Contract\ExceptionHandlerInterface`, whose `handle(Throwable): void` method performs non-protocol exception handling.
+## Declaring handlers
 
-`Registry\ExceptionHandlerProvider` discovers the base Attribute and every derived native Attribute once, resolves the marked
-objects from DI, consumes the trusted concrete declaration instances returned by Annotator, and keeps them in
-descending, stable priority order. It does not reconstruct declarations from metadata arguments. Consumers query an
-exact Attribute class through `getHandlersForAttribute()`: the generic `ExceptionDispatcher` therefore consumes only
-exact `Attribute\ExceptionHandler` declarations, while another component may derive its own Attribute and validate its
-own handler contract against registrations returned by the same provider.
+A handler is a class carrying `#[ExceptionHandler]` and implementing `Contract\ExceptionHandlerInterface`, whose `handle(Throwable): void` method performs non-protocol exception handling. The Attribute declares the handled `Throwable` class, `Throwable::class` by default, and an integer priority, `0` by default. Handlers are resolved from DI; higher priorities run first and equal priorities keep discovery order.
 
-`ExceptionHandlerRegistration::matches(Throwable $throwable): bool` exposes the shared `is_a` matching rule to
-protocol dispatchers. It accepts subclasses of the declared exception and leaves ordering with the provider.
-Protocol consumers use the shared rule:
+To customize exception output, declare an `#[ExceptionHandler(exception: Throwable::class)]` handler or replace stdout log formatting through the `StdoutLoggerInterface` contract.
+
+## Dispatching
+
+`SuperKernel\Contract\ExceptionDispatcherInterface::dispatch()` accepts only a `Throwable` and returns `void`. The generic dispatcher invokes every matching handler; a handler matches the declared exception class and its subclasses. A failed handler is fallback-reported and does not prevent a later matching handler from running. If no matching handler completes successfully, the original throwable is written once through `SuperKernel\Contract\StdoutLoggerInterface`. The dispatcher does not select an HTTP response, process exit, task result, or another protocol action.
+
+Fallback records always contain the complete `(string) $throwable`, including PHP's file, line, stack, and previous-exception chain, through `StdoutLoggerInterface`; applications need no configuration for this component.
+
+Use the dispatcher only after the current process's DI container is ready; it provides no handler for failures that occur before then.
+
+## Protocol-specific handlers
+
+A protocol component may derive its own Attribute from `Attribute\ExceptionHandler` and validate its own handler contract. `Registry\ExceptionHandlerProvider::getHandlersForAttribute()` returns the registrations for one exact Attribute class in priority order, so the generic dispatcher handles only exact `#[ExceptionHandler]` declarations. `ExceptionHandlerRegistration::matches(Throwable $throwable): bool` exposes the shared matching rule:
 
 ```php
 foreach ($handlerProvider->getHandlersForAttribute($attributeClass) as $registration) {
@@ -24,47 +30,4 @@ foreach ($handlerProvider->getHandlersForAttribute($attributeClass) as $registra
         // Apply the protocol's handler contract and response/propagation rules.
     }
 }
-```
-
-`SuperKernel\Contract\ExceptionDispatcherInterface::dispatch()` accepts only a `Throwable` and returns `void`. The
-generic dispatcher invokes every matching base handler. A failed handler is fallback-reported and does not prevent a
-later matching handler from running. If no matching handler completes successfully, the original throwable is written
-once through `SuperKernel\Contract\StdoutLoggerInterface`. The dispatcher does not select an HTTP response, process
-exit, task result, or another protocol action.
-
-Fallback records always contain the complete `(string) $throwable`, including PHP's file, line, stack, and
-previous-exception chain, through `StdoutLoggerInterface`; applications need no configuration for this component.
-To customize exception output, declare an `#[ExceptionHandler(exception: Throwable::class)]` handler or replace stdout
-log formatting through the `StdoutLoggerInterface` contract.
-
-The dispatcher is intended only after the current process DI graph is ready.
-
-## Source organization
-
-Paths below are relative to `src/` and the package namespace.
-
-| Directory  | Responsibility                                                                                                     |
-|------------|--------------------------------------------------------------------------------------------------------------------|
-| `Registry` | `ExceptionHandlerProvider` and `ExceptionHandlerRegistration`: discovery, ordering, and exact declaration queries. |
-| `Reporter` | `FallbackExceptionReporter`: terminal exception logging.                                                           |
-| `Provider` | DI factories for the registry and dispatcher.                                                                      |
-
-### Public namespaces
-
-Use the following component declarations:
-
-- `Registry\ExceptionHandlerProvider`
-- `Registry\ExceptionHandlerRegistration`
-- `Reporter\FallbackExceptionReporter`
-
-## Development
-
-Use a PHP 8.4 Composer in this package's checkout:
-
-```bash
-composer install
-composer validate --strict
-composer test
-composer format:check
-composer format
 ```
