@@ -4,30 +4,105 @@
 
 # SuperKernel Exception Dispatcher
 
-`super-kernel/exception-dispatcher` provides the DI-ready exception-handler registry and generic dispatcher used by SuperKernel runtime boundaries.
+`super-kernel/exception-dispatcher` sends the exceptions that reach SuperKernel's boundaries, such as a failed console command, to the handlers that classes declare with its `#[ExceptionHandler]` Attribute, and logs the ones that no handler takes.
 
-## Declaring handlers
+## Installation
 
-A handler is a class carrying `#[ExceptionHandler]` and implementing `Contract\ExceptionHandlerInterface`, whose `handle(Throwable): void` method performs non-protocol exception handling. The Attribute declares the handled `Throwable` class, `Throwable::class` by default, and an integer priority, `0` by default. Handlers are resolved from DI; higher priorities run first and equal priorities keep discovery order.
+```bash
+composer require super-kernel/exception-dispatcher
+```
 
-To customize exception output, declare an `#[ExceptionHandler(exception: Throwable::class)]` handler or replace stdout log formatting through the `StdoutLoggerInterface` contract.
+The dispatcher writes the exceptions that no handler takes through `SuperKernel\Contract\StdoutLoggerInterface`, which `super-kernel/logger` provides; the package does not require it, so install it too unless the application provides its own. Handlers are created through the container and found in the metadata that `skernel build` generates, so a project needs SKERNEL to build it.
 
-## Dispatching
+## What it provides
 
-`SuperKernel\Contract\ExceptionDispatcherInterface::dispatch()` accepts only a `Throwable` and returns `void`. The generic dispatcher invokes every matching handler; a handler matches the declared exception class and its subclasses. A failed handler is fallback-reported and does not prevent a later matching handler from running. If no matching handler completes successfully, the original throwable is written once through `SuperKernel\Contract\StdoutLoggerInterface`. The dispatcher does not select an HTTP response, process exit, task result, or another protocol action.
+- Handlers declared with `#[ExceptionHandler]` for one throwable class and its subclasses, ordered by priority.
+- `SuperKernel\Contract\ExceptionDispatcherInterface`, which calls every matching handler.
+- A record of the complete exception through the stdout logger when no handler completes.
+- A failing handler logged and skipped, without stopping the others.
+- Derived Attributes and a handler registry, so another boundary can keep its own handler family.
 
-Fallback records always contain the complete `(string) $throwable`, including PHP's file, line, stack, and previous-exception chain, through `StdoutLoggerInterface`; applications need no configuration for this component.
+It does not:
 
-Use the dispatcher only after the current process's DI container is ready; it provides no handler for failures that occur before then.
+- choose an HTTP response, a process exit, a retry, or another recovery action;
+- stop at the first handler that matches;
+- handle exceptions before the container is ready;
+- catch exceptions by itself; the boundaries, such as `super-kernel/framework`, dispatch them.
 
-## Protocol-specific handlers
+## Quick start
 
-A protocol component may derive its own Attribute from `Attribute\ExceptionHandler` and validate its own handler contract. `Registry\ExceptionHandlerProvider::getHandlersForAttribute()` returns the registrations for one exact Attribute class in priority order, so the generic dispatcher handles only exact `#[ExceptionHandler]` declarations. `ExceptionHandlerRegistration::matches(Throwable $throwable): bool` exposes the shared matching rule:
+Declare a handler. Save it as `src/ExceptionHandler/ReportFailure.php`:
 
 ```php
-foreach ($handlerProvider->getHandlersForAttribute($attributeClass) as $registration) {
-    if ($registration->matches($throwable)) {
-        // Apply the protocol's handler contract and response/propagation rules.
+<?php
+
+declare(strict_types=1);
+
+namespace Src\ExceptionHandler;
+
+use RuntimeException;
+use SuperKernel\ExceptionDispatcher\Attribute\ExceptionHandler;
+use SuperKernel\ExceptionDispatcher\Contract\ExceptionHandlerInterface;
+use Throwable;
+
+#[ExceptionHandler(RuntimeException::class)]
+final readonly class ReportFailure implements ExceptionHandlerInterface
+{
+    public function handle(Throwable $throwable): void
+    {
+        echo 'Failed: ', $throwable->getMessage(), PHP_EOL;
     }
 }
 ```
+
+Dispatch an exception from a script. Save it as `bin/report.php`:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use SuperKernel\Context\ApplicationContext;
+use SuperKernel\Contract\ExceptionDispatcherInterface;
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+$exceptions = ApplicationContext::getContainer()->get(ExceptionDispatcherInterface::class);
+
+$exceptions->dispatch(new RuntimeException('The invoice feed is unavailable.'));
+```
+
+Build the project and run the script:
+
+```bash
+skernel build
+php bin/report.php
+```
+
+It prints `Failed: The invoice feed is unavailable.`.
+
+## Public surface
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `SuperKernel\ExceptionDispatcher\Attribute\ExceptionHandler` | Attribute | Registers the annotated class as a handler of `exception`, `Throwable` by default, with a `priority`, `0` by default; other boundaries derive their Attributes from it. |
+| `SuperKernel\ExceptionDispatcher\Contract\ExceptionHandlerInterface` | Interface | Implemented by a handler: `handle()` receives the throwable. |
+| `SuperKernel\Contract\ExceptionDispatcherInterface` | Interface | Provided by the container; `dispatch()` sends a throwable to every matching handler. |
+| `SuperKernel\Contract\StdoutLoggerInterface` | Interface | Receives the complete exception when no handler completes, and each handler failure. |
+| `SuperKernel\ExceptionDispatcher\Registry\ExceptionHandlerProvider` | Class | Provided by the container; `getHandlersForAttribute()` returns the handlers of one Attribute class in order. |
+| `SuperKernel\ExceptionDispatcher\Registry\ExceptionHandlerRegistration` | Class | A handler with its declaration; `matches()` tells whether it takes a throwable. |
+
+## Behavior to know
+
+- Every matching handler runs, higher priorities first and equal priorities in the order the build found them; `dispatch()` returns nothing.
+- A handler that throws is logged as `Exception handler <handler> failed while processing <exception class>: <failure>`, and the next handler still runs. When no matching handler completes, the original throwable is logged once, with its file, line, trace, and previous exceptions.
+- The handlers are created with the dispatcher. An invalid declaration raises `SuperKernel\ExceptionDispatcher\Exception\InvalidExceptionHandlerDeclarationException` then, so nothing can be dispatched; with `super-kernel/framework` installed, `skernel build` and the application start fail.
+- Handlers are found in the build metadata: run `skernel build` again after adding, removing, or changing a handler, or start with `skernel run`, which builds first.
+
+## Documentation
+
+The developer documentation describes ordering handlers, the fallback record, customizing the output, handler families for other boundaries, and every error message: [SuperKernel Exception Dispatcher](https://github.com/super-kernel/.github/blob/main/docs/components/exception-dispatcher.md).
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE).
