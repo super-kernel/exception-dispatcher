@@ -12,7 +12,7 @@
 composer require super-kernel/exception-dispatcher
 ```
 
-The dispatcher writes the exceptions that no handler takes through `SuperKernel\Contract\StdoutLoggerInterface`, which `super-kernel/logger` provides; the package does not require it, so install it too unless the application provides its own. Handlers are created through the container and found in the metadata that `skernel build` generates, so a project needs SKERNEL to build it.
+The dispatcher writes the exceptions that no handler takes through `SuperKernel\Contract\StdoutLoggerInterface` and needs a provider of it, such as `super-kernel/logger`, which the package suggests but does not require; install it with `composer require super-kernel/logger` unless the application provides its own. Without a provider, the dispatcher cannot be created, so with `super-kernel/framework` installed `skernel build` and the application's start fail with `Unable to resolve method parameter SuperKernel\ExceptionDispatcher\Provider\ExceptionDispatcherProvider::__invoke($logger) of type SuperKernel\Contract\StdoutLoggerInterface.` Handlers are created through the container and found in the metadata that `skernel build` generates, so a project needs SKERNEL to build it.
 
 ## What it provides
 

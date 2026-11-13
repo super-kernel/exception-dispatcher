@@ -12,7 +12,7 @@
 composer require super-kernel/exception-dispatcher
 ```
 
-分发器通过 `SuperKernel\Contract\StdoutLoggerInterface` 写出没有处理器接手的异常，该接口由 `super-kernel/logger` 提供；本包并不依赖它，因此除非应用自己提供该接口，否则也要安装它。处理器通过容器创建，并从 `skernel build` 生成的元数据中发现，因此项目需要用 SKERNEL 构建。
+分发器通过 `SuperKernel\Contract\StdoutLoggerInterface` 写出没有处理器接手的异常，因此需要该接口的一个提供者，例如 `super-kernel/logger`；本包建议（suggest）但并不依赖该包，除非应用自己提供该接口，否则请用 `composer require super-kernel/logger` 安装它。缺少提供者时无法创建分发器，因此安装了 `super-kernel/framework` 时，`skernel build` 和应用启动都会失败，消息为 `Unable to resolve method parameter SuperKernel\ExceptionDispatcher\Provider\ExceptionDispatcherProvider::__invoke($logger) of type SuperKernel\Contract\StdoutLoggerInterface.`处理器通过容器创建，并从 `skernel build` 生成的元数据中发现，因此项目需要用 SKERNEL 构建。
 
 ## 提供的能力
 
