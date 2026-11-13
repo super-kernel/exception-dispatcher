@@ -14,6 +14,9 @@
         "friendsofphp/php-cs-fixer": "^3.95.27",
         "phpunit/phpunit": "^13.4.5"
     },
+    "suggest": {
+        "super-kernel/logger": "Provides the SuperKernel\\Contract\\StdoutLoggerInterface through which the exception dispatcher logs unhandled exceptions; the dispatcher cannot be created without one."
+    },
     "autoload": {
         "psr-4": {
             "SuperKernel\\ExceptionDispatcher\\": "src/"
